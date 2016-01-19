@@ -1,0 +1,16 @@
+#!/bin/bash
+
+n=$1
+fn="events${n}x.json"
+temp_file=temp.json
+
+for i in `seq 1 $n`; do cat trimmed_events.json >> $fn; done
+
+# remove trailing comma
+sed -i '$ d' $fn
+
+#make well formed json array
+mv $fn $temp_file
+echo ']' >> $temp_file
+echo '[' >> $fn
+cat $temp_file >> $fn
