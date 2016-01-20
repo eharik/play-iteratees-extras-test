@@ -8,15 +8,17 @@ import scala.concurrent.duration.Duration
 
 object JsonPerformanceTest extends App {
 
-  def jsonStream(fn: String) = {
-    Enumerator.fromFile(new File(s"./src/test/resources/$fn")) &>
-      Encoding.decode() &>
-      JsonEnumeratees.jsArray
+  def vanillaStream(fn: String) = {
+    Enumerator.fromFile(new File(s"./src/test/resources/$fn"))
   }
 
-  def test(fileName: String = "events.json") = {
+  def decodedStream(fn: String) = vanillaStream(fn) &> Encoding.decode()
+
+  def jsonStream(fn: String) = decodedStream(fn) &> JsonEnumeratees.jsArray
+
+  def test(fileName: String = "events.json")(f: String => Enumerator[_]) = {
     Await.result(
-      jsonStream(fileName) |>>> Iteratee.ignore,
+      f(fileName) |>>> Iteratee.ignore,
       Duration.Inf)
   }
 
@@ -26,13 +28,22 @@ object JsonPerformanceTest extends App {
     System.currentTimeMillis() - start
   }
 
-  println("<----- Degraded Performance Test ---->")
-  println("Warmup: " + time((1 to 10).foreach(_ => test())) + "ms")
-  println("1x:   " + time(test("events.json")) + "ms")
-  println("10x:  " + time(test("events10x.json")) + "ms")
-  println("100x: " + time(test("events100x.json")) + "ms")
-  println("200x: " + time(test("events200x.json")) + "ms")
-  println("400x: " + time(test("events400x.json")) + "ms")
-  println("800x: " + time(test("events800x.json")) + "ms")
+  println("Warmup: " + time((1 to 10).foreach(_ => test()(decodedStream))) + "ms")
 
+  val xFactor = Seq(10, 100, 200, 400, 800)
+
+  println("<----- Vanilla Enum Performance Test ---->")
+  xFactor foreach { x =>
+    println(s"${x}x: " + time(test(s"events${x}x.json")(vanillaStream)) + "ms")
+  }
+
+  println("<----- Decoding Performance Test ---->")
+  xFactor foreach { x =>
+    println(s"${x}x: " + time(test(s"events${x}x.json")(decodedStream)) + "ms")
+  }
+
+  println("<----- Json Parsing Performance Test ---->")
+  xFactor foreach { x =>
+    println(s"${x}x: " + time(test(s"events${x}x.json")(jsonStream)) + "ms")
+  }
 }
